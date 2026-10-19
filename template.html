@@ -1,0 +1,896 @@
+<title>Мои города</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Golos+Text:wght@400;500;600&display=swap">
+<style>
+/* Layout: golden-hour map on the left (top on phones); right ledger switches between the city list, "my trips" track and a city card. Single light look. */
+:root{
+  --bg:#f7f6fa; --card:#ffffff; --line:#e6e2ec;
+  --ink:#1f1b2e; --mute:#6b6680; --faint:#aaa4ba;
+  --been:#e2557c; --been-deep:#c23a62; --want:#6b4bd8; --want-deep:#5236c0; --soft:#fff1f3; --soft-w:#f2eefe;
+  --sun:linear-gradient(160deg,#ffc58f 0%,#ff8fa3 50%,#9a86ff 100%);
+  --f-display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.4;overflow:hidden}
+*{box-sizing:border-box}
+button,select,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--want);outline-offset:2px;border-radius:6px}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 460px}
+.stage{position:relative;min-width:0;min-height:0;background:var(--sun)}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map.hover{cursor:pointer}
+.hud{position:absolute;top:calc(18px + env(safe-area-inset-top,0px));left:max(20px,env(safe-area-inset-left,0px));pointer-events:none;display:flex;align-items:flex-end;gap:10px;color:#fff}
+.hud b{font-family:var(--f-display);font-weight:800;font-size:clamp(40px,5vw,64px);line-height:.85;text-shadow:0 2px 14px rgba(120,40,90,.25);font-variant-numeric:tabular-nums}
+.hud span{font-size:13px;line-height:1.25;padding-bottom:3px}
+.hud em{font-style:normal;font-weight:600}
+.mapctl{position:absolute;top:calc(18px + env(safe-area-inset-top,0px));right:max(18px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:6px}
+.mapctl button{background:#fff;border:1px solid var(--line);box-shadow:0 2px 8px rgba(31,27,46,.08);border-radius:10px;width:38px;height:38px;font-size:18px}
+.legend{position:absolute;left:max(20px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:14px;background:rgba(255,255,255,.9);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(120,40,90,.15)}
+.legend span{display:flex;align-items:center;gap:6px}
+.shareFab{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));background:#fff;color:var(--ink);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14px;box-shadow:0 6px 20px rgba(120,40,90,.22);display:flex;gap:8px;align-items:center}
+.pw{width:15px;height:15px;flex:none;vertical-align:-3px}
+
+.panel{background:var(--bg);min-width:0;min-height:0;overflow-y:auto;border-left:1px solid var(--line);padding-block:calc(20px + env(safe-area-inset-top,0px)) 40px;padding-left:22px;padding-right:max(22px,env(safe-area-inset-right,0px))}
+.top{display:flex;flex-direction:column;gap:12px;margin-bottom:12px}
+.brandrow{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{font-family:var(--f-display);font-weight:800;font-size:24px;line-height:1}
+.brand em{font-style:normal;background:var(--sun);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sharebtn{font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;display:flex;gap:6px;align-items:center}
+.stats{display:flex;gap:10px}
+.stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-family:var(--f-display);font-weight:800;font-size:24px;line-height:1.05;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--mute)}
+.stat.been b{color:var(--been-deep)}
+.stat.want b{color:var(--want-deep)}
+.tabs{display:flex;background:#ece9f2;border-radius:12px;padding:3px;gap:3px}
+.tab{flex:1;padding:8px 6px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--mute);white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(31,27,46,.08)}
+.tab .cnt{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:999px;background:var(--want);color:#fff;font-size:12px;line-height:20px}
+.ringban{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;width:100%;padding:12px 14px;border-radius:14px;background:linear-gradient(120deg,#fff6df,#ffe6b0);border:1px solid #f3d38a}
+.ringban[aria-pressed="true"]{box-shadow:0 0 0 2px #f5b83d}
+.ringban .rt{display:grid;gap:2px;min-width:0}
+.ringban b{font-family:var(--f-display);font-weight:600;font-size:15px;color:#7a4e04}
+.ringban small{font-size:12.5px;color:#8a6a2a}
+.ringban .rd{display:flex;gap:4px;flex:none}
+.ringban .rd i{width:10px;height:10px;border-radius:50%;border:1.5px solid #e2a93a;background:#fff}
+.ringban .rd i.on{background:#f5a623;border-color:#f5a623}
+.ringban .rd i.w{border-style:dashed;border-color:var(--want)}
+.gr{display:inline-block;margin-left:8px;padding:2px 7px;border-radius:999px;background:#fff1cc;color:#8a5a00;font-family:var(--f-body);font-size:10.5px;font-weight:600;vertical-align:middle;letter-spacing:0}
+.ringrow{display:flex;gap:10px;align-items:center}
+.ringrow .line{flex:1}
+.ringrow .gr{display:none}
+.ri{width:24px;height:24px;border-radius:50%;background:#fff1cc;color:#8a5a00;font-weight:700;font-size:12px;display:grid;place-items:center;flex:none}
+.search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.search::placeholder{color:var(--faint)}
+
+.hubrow{border-bottom:1px solid var(--line);padding:10px 0}
+.line{display:flex;align-items:center;gap:8px}
+.nm{flex:1;min-width:0;text-align:left;overflow-wrap:break-word;color:#3d3850}
+.nm:hover{color:var(--ink);text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px}
+.hubrow > .line .nm{font-family:var(--f-display);font-weight:600;line-height:1.1}
+.line.b .nm{color:var(--been-deep)}
+.line.w .nm{color:var(--want-deep)}
+.pill{flex:none;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 11px;color:var(--mute);display:flex;align-items:center;gap:4px}
+.pill .pw{width:13px;height:13px}
+.pill:hover{border-color:var(--faint);color:var(--ink)}
+.pill[data-k="b"][aria-pressed="true"]{background:var(--been);border-color:var(--been);color:#fff}
+.pill[data-k="w"][aria-pressed="true"]{border-color:var(--want);color:var(--want-deep);background:var(--soft-w)}
+.more{margin-top:6px;font-size:13px;color:var(--mute)}
+.more:hover{color:var(--ink)}
+.more b{font-weight:600;color:var(--been-deep)}
+.subs{margin:8px 0 2px 14px;border-left:1px solid var(--line);padding-left:12px}
+.subs .line{padding:4px 0}
+.subs .s1 .nm{font-size:17px;font-weight:600}
+.subs .s2 .nm{font-size:14.5px}
+.subs .s3 .nm{font-size:13px}
+.subs .pill{padding:3px 9px;font-size:11px}
+.empty{color:var(--mute);padding:14px 0;text-wrap:pretty}
+
+.trip{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px;margin-top:10px;text-align:left;width:100%}
+.trip:hover{border-color:#d6cff0}
+.trip .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.trip .hd strong{font-family:var(--f-display);font-weight:600;font-size:19px;color:var(--want-deep)}
+.trip .hd span{font-size:13px;color:var(--mute);text-align:right}
+.trip .price{font-size:14px}
+.trip .price b{font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:5px;align-items:center}
+.dots i{flex:1;height:6px;border-radius:6px;background:#ece9f2}
+.dots i.on{background:var(--want)}
+.dots small{margin-left:6px;font-size:12px;color:var(--mute);white-space:nowrap}
+
+.card .back{font-size:13px;color:var(--mute);font-weight:600;margin-bottom:14px}
+.card .back:hover{color:var(--ink)}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.cname{font-family:var(--f-display);font-weight:800;line-height:1;letter-spacing:-.01em;margin:6px 0 6px;font-size:clamp(30px,7vw,46px);overflow-wrap:break-word;text-wrap:balance}
+.cname.b{color:var(--been-deep)} .cname.w{color:var(--want-deep)}
+.cmeta{color:var(--mute);font-size:14px}
+.bigmarks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0 6px}
+.bigmark{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:12px;font-weight:600;display:flex;gap:10px;align-items:center;justify-content:center}
+.bigmark .pw{width:18px;height:18px}
+.bigmark[data-k="b"][aria-pressed="true"]{background:var(--been);border-color:var(--been);color:#fff}
+.bigmark[data-k="w"][aria-pressed="true"]{background:var(--soft-w);border-color:var(--want);color:var(--want-deep)}
+.sec{margin-top:22px}
+.sec h3{margin:0 0 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+.sec h3 small{letter-spacing:0;text-transform:none;font-weight:500;color:var(--faint);font-size:12px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.steps{display:grid;gap:2px}
+.step{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f0edf5}
+.step:last-child{border-bottom:0}
+.step .ck{width:24px;height:24px;border-radius:50%;border:2px solid #d9d3e8;display:grid;place-items:center;flex:none;color:#fff;font-size:13px;font-weight:700}
+.step.done .ck{background:var(--want);border-color:var(--want)}
+.step .tx{flex:1;min-width:0}
+.step .tx b{display:block;font-weight:600}
+.step .tx span{font-size:13px;color:var(--mute)}
+.step a,.step .act{font-size:13px;font-weight:600;color:var(--want-deep);text-decoration:none;white-space:nowrap}
+.step input[type=date]{border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:13px;background:#fff}
+.calc .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.fld{display:grid;gap:4px;font-size:12px;color:var(--mute)}
+.fld select,.fld .stepper{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:14px;color:var(--ink);width:100%}
+.stepper{display:flex;align-items:center;justify-content:space-between;padding:4px 6px!important}
+.stepper button{width:30px;height:30px;border-radius:8px;background:#f2eff7;font-size:18px;line-height:1}
+.stepper b{font-variant-numeric:tabular-nums}
+.seg{display:flex;background:#f2eff7;border-radius:10px;padding:3px}
+.seg button{flex:1;padding:6px;border-radius:8px;font-size:13px;font-weight:600;color:var(--mute)}
+.seg button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(31,27,46,.1)}
+.total{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:14px 0 10px;flex-wrap:wrap}
+.total b{font-family:var(--f-display);font-weight:800;font-size:28px;font-variant-numeric:tabular-nums}
+.total span{font-size:13px;color:var(--mute)}
+.brk{display:grid;gap:8px}
+.br{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px}
+.br em{font-style:normal;font-variant-numeric:tabular-nums;font-weight:600}
+.br small{grid-column:1/-1;font-size:12px;color:var(--faint)}
+.br .bar{grid-column:1/-1;height:6px;border-radius:6px;background:#f2eff7;overflow:hidden}
+.br .bar i{display:block;height:100%;border-radius:6px;background:var(--sun)}
+.note{font-size:12px;color:var(--faint);margin-top:12px;text-wrap:pretty}
+.list3{display:grid;gap:10px}
+.it{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
+.it .n{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--soft);color:var(--been-deep)}
+.it b{display:block;font-weight:600}
+.it span{font-size:13px;color:var(--mute)}
+.souv{background:var(--sun);color:#fff;border-radius:16px;padding:16px}
+.souv b{display:block;font-family:var(--f-display);font-weight:600;font-size:18px;margin-bottom:4px}
+.souv span{font-size:14px;opacity:.95}
+.cta{display:block;text-align:center;margin-top:22px;padding:14px;border-radius:14px;background:var(--ink);color:#fff;text-decoration:none;font-weight:600}
+.cta small{display:block;font-weight:400;opacity:.7;font-size:12px;margin-top:2px}
+
+.modal{position:fixed;inset:0;background:rgba(31,27,46,.55);display:grid;place-items:center;z-index:20;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet{background:#fff;border-radius:20px;padding:16px;display:grid;gap:12px;max-width:420px;width:100%;max-height:100%;overflow:auto;justify-items:center}
+.sheet img{max-height:62vh;max-width:100%;border-radius:14px;box-shadow:0 10px 30px rgba(31,27,46,.2)}
+.sheet .acts{display:flex;gap:8px;width:100%}
+.sheet .acts button{flex:1;padding:12px;border-radius:12px;font-weight:600}
+.primary{background:var(--ink);color:#fff}
+.ghost{background:#f2eff7}
+.sheet p{margin:0;font-size:13px;color:var(--mute);text-align:center}
+
+
+.tab.gen{color:var(--want-deep)}
+.pick .lead{margin:4px 0 6px;color:var(--mute);font-size:14px;text-wrap:pretty}
+.grp{margin-top:12px}
+.grp .gt{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:#4d4862}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.pick textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card);resize:vertical;font-size:14px}
+.pick .row .fld{max-width:220px}
+.slider .sl{display:flex;align-items:center;gap:12px}
+.slider input{flex:1;accent-color:var(--want)}
+.slider b{min-width:72px;font-variant-numeric:tabular-nums}
+.slider small{color:var(--faint);font-size:12px}
+.gobtn{width:100%;margin-top:14px;padding:13px;border-radius:14px;background:var(--sun);color:#fff;font-weight:700;font-size:15px;box-shadow:0 8px 20px rgba(255,120,150,.3)}
+.genlbl{margin-top:18px;font-size:12px;font-weight:600;color:var(--want-deep)}
+.deck{position:relative;height:440px;margin-top:10px}
+.gcard{position:absolute;inset:0;background:var(--card);border-radius:22px;box-shadow:0 12px 30px rgba(31,27,46,.14);overflow:hidden;display:flex;flex-direction:column;touch-action:pan-y;user-select:none;-webkit-user-select:none;transform:translateY(calc(var(--d) * 12px)) scale(calc(1 - var(--d) * .04));transition:transform .3s ease,opacity .3s ease;cursor:grab}
+.gcard[data-depth="1"],.gcard[data-depth="2"]{pointer-events:none}
+.gcard[data-depth="2"]{opacity:.6}
+.gcard[data-depth="1"] .body,.gcard[data-depth="2"] .body{visibility:hidden}
+.gcard.drag{transition:none;cursor:grabbing}
+.gcard .hero{position:relative;padding:18px 18px 16px;color:#fff;flex:none}
+.gcard .rg{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.9;font-weight:600}
+.gcard h4{margin:6px 0 4px;font-family:var(--f-display);font-weight:800;font-size:30px;line-height:1.02;overflow-wrap:break-word}
+.gcard .hl{font-size:15px;font-weight:500;opacity:.95}
+.stamp{position:absolute;top:16px;padding:4px 10px;border:3px solid #fff;border-radius:10px;font-weight:800;font-size:14px;color:#fff;opacity:0;pointer-events:none}
+.stamp.like{left:16px;transform:rotate(-10deg)}
+.stamp.nope{right:16px;transform:rotate(10deg)}
+.gcard .body{padding:14px 16px 16px;display:grid;gap:10px;overflow:auto;flex:1;align-content:start}
+.gcard .why{margin:0;font-size:14.5px}
+.gcard .tg{display:flex;gap:6px;flex-wrap:wrap}
+.gcard .tg span{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--soft-w);color:var(--want-deep)}
+.blk{border-radius:12px;background:#f7f5fa;padding:9px 12px}
+.blk .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-bottom:2px}
+.blk .v{font-size:14px}
+.blk .warn{margin-left:8px;font-size:12px;font-weight:600;color:var(--been-deep)}
+.gcard .open{justify-self:start;margin-top:2px;font-weight:600;color:var(--want-deep)}
+.skel .body{gap:12px}
+.sk{height:14px;border-radius:7px;background:linear-gradient(90deg,#efecf4,#f8f6fb,#efecf4);background-size:200% 100%;animation:sh 1.2s infinite}
+.sk.short{width:60%}
+@keyframes sh{to{background-position:-200% 0}}
+.deckbtns{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:16px}
+.rb{width:54px;height:54px;border-radius:50%;background:var(--card);box-shadow:0 4px 14px rgba(31,27,46,.12);font-size:20px;font-weight:700}
+.rb.nope{color:var(--mute)}
+.rb.like{background:var(--want);color:#fff}
+.rb.been{width:auto;height:44px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600}
+.hint{text-align:center;font-size:12px;color:var(--faint);margin:8px 0 0}
+.done{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:6px;text-align:center}
+.done b{font-family:var(--f-display);font-weight:600;font-size:18px}
+.done span{color:var(--mute);font-size:14px}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+@media (max-width:820px){
+  .app{display:flex;flex-direction:column}
+  .stage{flex:0 0 42%}
+  .panel{flex:1;border-left:0;border-top:1px solid var(--line);padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .legend{font-size:12px;padding:6px 10px;gap:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <path id="pinShape" d="M0 .9 C -.25 .45 -.7 .1 -.7 -.35 A .7 .7 0 1 1 .7 -.35 C .7 .1 .25 .45 0 .9 Z"/>
+  <g id="pinB"><use href="#pinShape" fill="#e2557c"/><circle cx="0" cy="-.35" r=".27" fill="#fff"/></g>
+  <g id="pinW"><use href="#pinShape" fill="rgba(107,75,216,.12)" stroke="#6b4bd8" stroke-width=".09" stroke-dasharray=".14 .1"/></g>
+</defs></svg>
+
+<div class="app">
+  <section class="stage" id="stage" aria-label="Карта России">
+    <canvas id="map"></canvas>
+    <div class="hud" aria-live="polite"><b id="hudN">0</b><span><span id="hudL">городов</span><br><em id="hudP">0 регионов</em></span></div>
+    <div class="mapctl">
+      <button id="zin" aria-label="Приблизить">+</button>
+      <button id="zout" aria-label="Отдалить">−</button>
+    </div>
+    <div class="legend"><span><svg class="pw" viewBox="-1 -1.1 2 2"><use href="#pinB"/></svg>был</span><span><svg class="pw" viewBox="-1 -1.1 2 2"><use href="#pinW"/></svg>хочу</span></div>
+    <button class="shareFab" id="shareFab">Поделиться картой</button>
+  </section>
+  <aside class="panel" id="panel">
+    <div id="home">
+      <div class="top">
+        <div class="brandrow"><div class="brand">Мои <em>города</em></div></div>
+        <div class="stats" id="stats"></div>
+        <button class="ringban" id="ringBan" aria-pressed="false"></button>
+        <div class="tabs" role="tablist">
+          <button class="tab gen" role="tab" data-tab="pick" aria-selected="true">✦ Подбор</button>
+          <button class="tab" role="tab" data-tab="all" aria-selected="false">Все города</button>
+          <button class="tab" role="tab" data-tab="trips" aria-selected="false">Мои поездки<span class="cnt" id="tripCnt" hidden>0</span></button>
+        </div>
+        <input class="search" id="q" type="search" placeholder="Найти город" autocomplete="off">
+      </div>
+      <div id="list"></div>
+    </div>
+    <div id="card" class="card" hidden></div>
+  </aside>
+</div>
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Картинка для сторис">
+    <img id="storyImg" alt="Моя карта городов для сторис">
+    <p id="saveHint">Картинка в формате сторис 9:16. Сохрани её и выложи в Instagram или ВКонтакте.</p>
+    <div class="acts"><button class="ghost" id="closeModal">Закрыть</button><button class="primary" id="saveImg">Сохранить картинку</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const DATA = __DATA__;
+__CONTENT__
+const TRAVEL = "https://spasibosberbank.ru/travel/";
+const G = DATA.g;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const CITIES = [];
+G.forEach((g, gi) => g.c.forEach((c, ci) => CITIES.push({ id: g.t + "|" + c[0], name: c[0], lat: c[1], lon: c[2], pop: c[3], px: c[4], py: c[5], gi, ci, hub: ci === 0, seed: Math.random() * 6.28 })));
+const byId = new Map(CITIES.map(c => [c.id, c]));
+const HUBS = CITIES.filter(c => c.hub).sort((a, b) => b.pop - a.pop);
+const RING = [["Сергиев Посад", "Московская"], ["Переславль-Залесский", "Ярославская"], ["Ростов", "Ярославская"], ["Углич", "Ярославская"], ["Рыбинск", "Ярославская"], ["Ярославль", "Ярославская"], ["Кострома", "Костромская"], ["Иваново", "Ивановская"], ["Суздаль", "Владимирская"], ["Владимир", "Владимирская"]]
+  .map(([n, r]) => CITIES.find(c => c.name === n && G[c.gi].t.includes(r))).filter(Boolean);
+const RING_IDS = new Set(RING.map(c => c.id));
+let ringMode = false;
+const MILLION = new Set(CITIES.filter(c => c.pop >= 1e6).map(c => c.name));
+
+const KEY = "ogni-rossii-v1", TKEY = "moi-goroda-trips-v1";
+let marks = {}, trips = {};
+try { marks = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
+try { trips = JSON.parse(localStorage.getItem(TKEY) || "{}") || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(marks)); localStorage.setItem(TKEY, JSON.stringify(trips)); } catch (e) {} };
+const fmtPop = p => p >= 1e6 ? (p / 1e6).toFixed(1).replace(".", ",").replace(",0", "") + " млн" : Math.round(p / 1e3) + " тыс.";
+const rub = n => Math.round(n).toLocaleString("ru-RU") + " ₽";
+const kRub = n => Math.round(n / 1000).toLocaleString("ru-RU");
+const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const pinIcon = (k, size = 13) => `<svg class="pw" viewBox="-1 -1.1 2 2" style="width:${size}px;height:${size}px"><use href="#${k === "b" ? "pinB" : "pinW"}"/></svg>`;
+
+// ---------- budget model (prototype assumptions) ----------
+const homeDefault = CITIES.find(c => c.name === "Москва");
+function tierOf(c) { const t = CONTENT[c.name]?.tier; if (t) return t; if (MILLION.has(c.name)) return 1.1; return .95; }
+function distKm(a, b) { const R = 6371, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+const fmtH = h => { const m = Math.max(10, Math.round(h * 6) * 10); return m < 60 ? `≈ ${m} мин` : `≈ ${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; };
+const MODES = {
+  none: { label: "на месте", cost: () => 0, time: () => "0 мин" },
+  el: { label: "электричка туда-обратно", cost: (km, n, cm) => 2 * (120 + 2.8 * km) * n * (cm ? 1.6 : 1), time: km => fmtH(km / 70 + .1) },
+  car: { label: "на машине, бензин туда-обратно", cost: (km, n) => 2 * km * 7.5 * Math.ceil(n / 4), time: km => fmtH(km * 1.2 / 80) },
+  train: { label: "поезд туда-обратно", cost: (km, n, cm) => 2 * (700 + 1.9 * km * 1.2) * n * (cm ? 1.9 : 1), time: km => fmtH(km * 1.2 / 90 + .3) },
+  night: { label: "ночной поезд туда-обратно", cost: (km, n, cm) => 2 * (1500 + 2.3 * km * 1.2) * n * (cm ? 1.8 : 1), time: () => "ночь в пути" },
+  plane: { label: "самолёт туда-обратно", cost: (km, n, cm) => 2 * (3800 + 3.3 * km) * n * (cm ? 1.4 : 1), time: km => fmtH(km / 750 + .6) },
+};
+const MODE_NAMES = { "": "Подобрать само", el: "Электричка", car: "Машина", train: "Поезд", night: "Ночной поезд", plane: "Самолёт" };
+function tripOf(id) { return trips[id] || (trips[id] = { days: 3, people: 2, level: "e", from: homeDefault.id, date: "", tickets: false, hotel: false, budget: false }); }
+function budget(c, t) {
+  const from = byId.get(t.from) || homeDefault, km = distKm(from, c), tier = tierOf(c), cm = t.level === "c";
+  const mk = km < 10 ? "none" : (t.mode && MODES[t.mode] ? t.mode : km <= 120 ? "el" : km <= 750 ? "train" : "plane");
+  const M = MODES[mk], mode = M.label, road = M.cost(km, t.people, cm), time = M.time(km);
+  const nights = Math.max(0, t.days - 1), rooms = Math.ceil(t.people / 2);
+  const hotel = nights * rooms * (cm ? 6500 : 3200) * tier;
+  const food = t.days * t.people * (cm ? 3000 : 1500) * tier;
+  const local = t.days * t.people * (cm ? 1000 : 350) * tier;
+  const fun = t.days * t.people * (cm ? 2200 : 800) * tier;
+  const total = road + hotel + food + local + fun;
+  return { km, mode, mk, time, from, nights, rooms, total, parts: [
+    ["Дорога", road, `${mode}${km >= 30 ? ` · ${Math.round(km).toLocaleString("ru-RU")} км · ${time} в одну сторону` : ""}`],
+    ["Жильё", hotel, nights ? `${nights} ${plural(nights, "ночь", "ночи", "ночей")}, ${rooms} ${plural(rooms, "номер", "номера", "номеров")}` : "без ночёвки"],
+    ["Еда", food, "кафе и рестораны"],
+    ["Транспорт в городе", local, "такси, метро, автобусы"],
+    ["Развлечения", fun, "музеи, экскурсии, билеты"]] };
+}
+const stepsDone = (c, t) => [!!t.date, !!t.budget, !!t.tickets, !!t.hotel, marks[c.id] === "b"].filter(Boolean).length;
+
+// ---------- map ----------
+const stage = document.getElementById("stage"), cv = document.getElementById("map"), ctx = cv.getContext("2d");
+const landPath = new Path2D(DATA.land), ruPath = new Path2D(DATA.ru);
+let cw = 0, ch = 0, dpr = 1, s0 = 1, ox = 0, oy = 0, T = d3.zoomIdentity, dirty = true;
+let open = null, focus = null;
+const anims = [];
+const zoom = d3.zoom().scaleExtent([1, 60]).clickDistance(5).on("zoom", e => { T = e.transform; dirty = true; });
+d3.select(cv).call(zoom).on("dblclick.zoom", null);
+function resize() {
+  const r = stage.getBoundingClientRect(); cw = r.width; ch = r.height; dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  const pad = cw < 500 ? 8 : 24;
+  s0 = Math.min((cw - pad * 2) / DATA.W, (ch - pad * 2) / DATA.H);
+  ox = (cw - DATA.W * s0) / 2; oy = (ch - DATA.H * s0) / 2 + 16;
+  zoom.extent([[0, 0], [cw, ch]]).translateExtent([[-cw * .3, -ch * .3], [cw * 1.3, ch * 1.3]]);
+  dirty = true;
+}
+const sx = c => T.x + T.k * (ox + s0 * c.px), sy = c => T.y + T.k * (oy + s0 * c.py);
+const PIN = new Path2D("M0 .9 C -.25 .45 -.7 .1 -.7 -.35 A .7 .7 0 1 1 .7 -.35 C .7 .1 .25 .45 0 .9 Z");
+function pin(g, x, y, s, mode, hole) {
+  g.save(); g.translate(x, y - .9 * s); g.scale(s, s); g.lineWidth /= s;
+  const d = g.getLineDash(); if (d.length) g.setLineDash(d.map(v => v / s));
+  if (mode !== "stroke") g.fill(PIN);
+  if (mode !== "fill") g.stroke(PIN);
+  if (hole) { g.shadowColor = "transparent"; g.fillStyle = hole; g.beginPath(); g.arc(0, -.35, .27, 0, 6.2832); g.fill(); }
+  g.restore();
+}
+function draw(now) {
+  const t = now / 1000, k = T.k * s0;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (T.x + T.k * ox), dpr * (T.y + T.k * oy));
+  ctx.fillStyle = "rgba(255,255,255,.14)"; ctx.fill(landPath);
+  ctx.fillStyle = "rgba(255,255,255,.34)"; ctx.fill(ruPath);
+  ctx.lineWidth = 1 / k; ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.stroke(ruPath);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const vis = c => { const x = sx(c), y = sy(c); return x > -40 && y > -40 && x < cw + 40 && y < ch + 40; };
+  const dr = Math.min(2.6, 1 + Math.log2(T.k) * .35);
+  for (const c of CITIES) {
+    if (marks[c.id] || !vis(c)) continue;
+    const inOpen = open !== null && c.gi === open;
+    ctx.globalAlpha = inOpen ? .95 : .45; ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(sx(c), sy(c), (c.pop > 5e5 ? 1.5 : c.pop > 1e5 ? 1.15 : .85) * dr * (inOpen ? 1.3 : 1), 0, 6.2832); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  if (ringMode) {
+    ctx.setLineDash([5, 5]); ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,226,140,.95)";
+    ctx.beginPath(); RING.forEach((c, i) => i ? ctx.lineTo(sx(c), sy(c)) : ctx.moveTo(sx(c), sy(c))); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = "#f5b83d";
+    RING.forEach((a, i) => { const b = RING[(i + 1) % RING.length]; if (marks[a.id] === "b" && marks[b.id] === "b") { ctx.beginPath(); ctx.moveTo(sx(a), sy(a)); ctx.lineTo(sx(b), sy(b)); ctx.stroke(); } });
+  }
+  for (const c of RING) {
+    if (marks[c.id] || !vis(c)) continue;
+    const pulse = reduce ? 0 : Math.sin(t * 2.5 + c.seed) * .8;
+    ctx.fillStyle = "#f5b83d"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(sx(c), sy(c), (ringMode ? 5.5 : 3.6) + pulse * .4, 0, 6.2832); ctx.fill(); ctx.stroke();
+  }
+  const gs = Math.min(1.6, 1 + Math.log2(T.k) * .12);
+  for (const c of CITIES) {
+    if (marks[c.id] !== "w" || !vis(c)) continue;
+    const bob = reduce ? 0 : Math.sin(t * 2 + c.seed) * 1.2;
+    ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.strokeStyle = "#5a3bd0"; ctx.lineWidth = 1.8; ctx.setLineDash([3, 2]);
+    pin(ctx, sx(c), sy(c) + bob, 12 * gs, "both"); ctx.setLineDash([]);
+  }
+  for (let i = anims.length - 1; i >= 0; i--) {
+    const a = anims[i], c = byId.get(a.id), p = (now - a.t0) / 700;
+    if (p >= 1 || !c) { anims.splice(i, 1); continue; }
+    ctx.globalAlpha = (1 - p) * .8; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sx(c), sy(c), 6 + p * 24, (6 + p * 24) * .45, 0, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  for (const c of CITIES) {
+    if (marks[c.id] !== "b" || !vis(c)) continue;
+    const a = anims.find(z => z.id === c.id), pp = a ? Math.min(1, (now - a.t0) / 260) : 1;
+    const s = (14 + 3 * Math.log10(Math.max(c.pop, 5e3) / 5e4)) * gs * (a ? .6 + .55 * Math.sin(pp * 2.3) / Math.sin(2.3) : 1);
+    ctx.save(); ctx.shadowColor = "rgba(120,30,80,.45)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+    ctx.fillStyle = "#ffffff"; pin(ctx, sx(c), sy(c), Math.max(10, s), "fill", RING_IDS.has(c.id) ? "#f5a623" : "#e2557c"); ctx.restore();
+  }
+  if (focus) {
+    ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sx(focus), sy(focus), 15 + (reduce ? 0 : Math.sin(t * 4) * 2), 0, 6.2832); ctx.stroke();
+  }
+  labels();
+}
+function labels() {
+  const cand = [];
+  for (const c of CITIES) {
+    const m = marks[c.id], inOpen = open !== null && c.gi === open;
+    let pr = -1;
+    if (focus === c) pr = 4e9;
+    else if (ringMode && RING_IDS.has(c.id)) pr = 3.5e9 + c.pop;
+    else if (inOpen) pr = 3e9 + c.pop;
+    else if (m) pr = 2e9 + c.pop;
+    else if (c.hub && (c.pop >= 3e5 || T.k > 1.8)) pr = 1e9 + c.pop;
+    else if (RING_IDS.has(c.id) && T.k > 2.5) pr = 1.5e9 + c.pop;
+    else if (T.k > 3.5 && c.pop >= 5e4) pr = c.pop;
+    else if (T.k > 9) pr = c.pop;
+    if (pr < 0) continue;
+    const x = sx(c), y = sy(c);
+    if (x < -60 || y < -20 || x > cw + 60 || y > ch + 20) continue;
+    const size = c.pop >= 1e6 ? 14 : c.pop >= 4e5 ? 12.5 : 11;
+    cand.push({ c, x, y, pr, m, size, f: (c.hub && size >= 12 ? "600 " + size + "px Unbounded, Arial Black, sans-serif" : "600 " + size + "px Golos Text, system-ui, sans-serif") });
+  }
+  cand.sort((a, b) => b.pr - a.pr); if (cand.length > 240) cand.length = 240;
+  const placed = [], hit = r => placed.some(p => r.x0 < p.x1 && r.x1 > p.x0 && r.y0 < p.y1 && r.y1 > p.y0);
+  ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  for (const L of cand) {
+    ctx.font = L.f;
+    const w = ctx.measureText(L.c.name).width, off = L.m === "b" ? 10 : 7;
+    let r = { x0: L.x + off, x1: L.x + off + w, y0: L.y - L.size / 2 - 1, y1: L.y + L.size / 2 + 1 }, al = "left";
+    if (hit(r) || r.x1 > cw - 4) { r = { x0: L.x - off - w, x1: L.x - off, y0: r.y0, y1: r.y1 }; al = "right"; if (hit(r)) continue; }
+    placed.push(r);
+    const tx = al === "left" ? r.x0 : r.x1; ctx.textAlign = al;
+    ctx.lineWidth = 3.2; ctx.strokeStyle = L.m === "w" ? "rgba(255,255,255,.95)" : "rgba(130,40,85,.5)"; ctx.strokeText(L.c.name, tx, L.y);
+    const gold = RING_IDS.has(L.c.id) && !L.m;
+    if (gold) { ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.strokeText(L.c.name, tx, L.y); }
+    ctx.fillStyle = L.m === "w" ? "#5236c0" : gold ? "#9a6406" : "#ffffff";
+    if (!L.m && !gold) ctx.globalAlpha = .9;
+    ctx.fillText(L.c.name, tx, L.y); ctx.globalAlpha = 1;
+  }
+}
+function loop(now) {
+  if (dirty || (!reduce && (anims.length || focus || Object.keys(marks).length))) { draw(now); dirty = false; }
+  requestAnimationFrame(loop);
+}
+function nearest(ex, ey) {
+  let best = null, bd = 18;
+  for (const c of CITIES) { const d = Math.hypot(sx(c) - ex, sy(c) - ey) - (c.hub ? 5 : 0) - (marks[c.id] ? 4 : 0); if (d < bd) { bd = d; best = c; } }
+  return best;
+}
+cv.addEventListener("click", e => { const r = cv.getBoundingClientRect(), c = nearest(e.clientX - r.left, e.clientY - r.top); if (c) openCard(c); });
+cv.addEventListener("mousemove", e => { const r = cv.getBoundingClientRect(); cv.classList.toggle("hover", !!nearest(e.clientX - r.left, e.clientY - r.top)); });
+document.getElementById("zin").onclick = () => d3.select(cv).transition().duration(reduce ? 0 : 300).call(zoom.scaleBy, 1.8);
+document.getElementById("zout").onclick = () => d3.select(cv).transition().duration(reduce ? 0 : 300).call(zoom.scaleBy, 1 / 1.8);
+
+// ---------- panel ----------
+const homeEl = document.getElementById("home"), cardEl = document.getElementById("card"), listEl = document.getElementById("list"), panel = document.getElementById("panel");
+let query = "", showAll = false, tab = "pick", cardCity = null;
+const hubSize = p => p >= 1e6 ? 26 : p >= 5e5 ? 21 : p >= 2.5e5 ? 18 : 16;
+const pills = c => { const m = marks[c.id] || ""; return `<button class="pill" data-k="b" data-id="${esc(c.id)}" aria-pressed="${m === "b"}">${pinIcon("b")}был</button><button class="pill" data-k="w" data-id="${esc(c.id)}" aria-pressed="${m === "w"}">${pinIcon("w")}хочу</button>`; };
+const line = (c, cls = "", style = "") => `<div class="line ${cls} ${marks[c.id] || ""}" data-row="${esc(c.id)}"><button class="nm" data-card="${esc(c.id)}"${style}>${esc(c.name)}${RING_IDS.has(c.id) ? `<span class="gr">Золотое кольцо</span>` : ""}</button>${pills(c)}</div>`;
+
+function renderStats() {
+  const nb = Object.values(marks).filter(v => v === "b").length, nw = Object.values(marks).filter(v => v === "w").length;
+  const regs = new Set(CITIES.filter(c => marks[c.id] === "b").map(c => c.gi)).size;
+  document.getElementById("hudN").textContent = nb;
+  document.getElementById("hudL").textContent = plural(nb, "город", "города", "городов");
+  document.getElementById("hudP").textContent = regs + " " + plural(regs, "регион", "региона", "регионов");
+  document.getElementById("stats").innerHTML =
+    `<div class="stat been"><b>${nb}</b><span>${pinIcon("b", 12)} ${plural(nb, "город", "города", "городов")}, где был</span></div>` +
+    `<div class="stat been"><b>${regs}</b><span>${plural(regs, "регион", "региона", "регионов")}</span></div>` +
+    `<div class="stat want"><b>${nw}</b><span>${pinIcon("w", 12)} хочу поехать</span></div>`;
+  const cnt = document.getElementById("tripCnt"); cnt.hidden = !nw; cnt.textContent = nw;
+  const rb = RING.filter(c => marks[c.id] === "b").length;
+  const ban = document.getElementById("ringBan");
+  ban.setAttribute("aria-pressed", tab === "ring");
+  ban.innerHTML = `<span class="rt"><b>Золотое кольцо</b><small>${rb === RING.length ? "Собрано целиком" : rb ? `Был в ${rb} из ${RING.length}. Ещё ${RING.length - rb}, и кольцо замкнётся` : "10 городов классического маршрута. Собери все"}</small></span><span class="rd">${RING.map(c => `<i class="${marks[c.id] === "b" ? "on" : marks[c.id] === "w" ? "w" : ""}"></i>`).join("")}</span>`;
+}
+function tripCard(c) {
+  const t = tripOf(c.id), b = budget(c, t), done = stepsDone(c, t);
+  const when = t.date ? new Date(t.date + "T00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "даты не выбраны";
+  return `<button class="trip" data-card="${esc(c.id)}">
+    <div class="hd"><strong>${esc(c.name)}</strong><span>${when} · ${t.days} ${plural(t.days, "день", "дня", "дней")} · ${t.people} чел.</span></div>
+    <div class="price">≈ <b>${kRub(b.total * .88)}–${kRub(b.total * 1.12)} тыс. ₽</b> · выезд: ${esc(b.from.name)}</div>
+    <div class="dots">${[0, 1, 2, 3, 4].map(i => `<i class="${i < done ? "on" : ""}"></i>`).join("")}<small>${done} из 5 шагов</small></div>
+  </button>`;
+}
+function renderList() {
+  renderStats();
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  document.getElementById("q").hidden = tab !== "all";
+  ringMode = tab === "ring"; dirty = true;
+  if (tab === "pick") { renderPick(); return; }
+  if (tab === "ring") {
+    const left = RING.filter(c => !marks[c.id]);
+    listEl.innerHTML = `<p class="empty" style="padding-top:4px">Классический маршрут: 8 городов 1967 года, Углич (с 2018) и Рыбинск (с 2025). Отмечай, где был: участки кольца на карте становятся золотыми.</p>`
+      + RING.map((c, i) => `<div class="hubrow ringrow"><span class="ri">${i + 1}</span>${line(c, "", ` style="font-size:17px"`)}</div>`).join("")
+      + (left.length ? `<button class="gobtn" id="ringAll" style="margin-top:16px">Добавить в «хочу» оставшиеся ${left.length}</button>` : `<p class="empty">Кольцо собрано целиком. Можно хвастаться в сторис.</p>`);
+    const ra = document.getElementById("ringAll");
+    if (ra) ra.onclick = () => { for (const c of left) { marks[c.id] = "w"; tripOf(c.id); } save(); renderList(); };
+    return;
+  }
+  if (!cardCity) focus = null;
+  if (tab === "trips") {
+    const w = CITIES.filter(c => marks[c.id] === "w").sort((a, b) => b.pop - a.pop);
+    const bl = CITIES.filter(c => marks[c.id] === "b").sort((a, b) => b.pop - a.pop);
+    listEl.innerHTML = `<div class="sec" style="margin-top:6px"><h3>Хочу поехать <small>${w.length}</small></h3></div>` + (w.length ? w.map(tripCard).join("") + `<p class="empty">Нажми на поездку, чтобы посчитать бюджет и пройти шаги до билета.</p>`
+      : `<p class="empty">Здесь будут города, куда ты хочешь поехать. Отметь «хочу» у любого города или свайпни карточку вправо в «Подборе».</p>`)
+      + `<div class="sec"><h3>Где я был <small>${bl.length} ${plural(bl.length, "город", "города", "городов")}</small></h3></div>` + (bl.length ? bl.map(c => `<div class="hubrow">${line(c, "", ` style="font-size:${c.hub ? 18 : 15}px"`)}</div>`).join("")
+      : `<p class="empty">Отметь «был» в списке городов или нажми «Был там» на карточке в «Подборе».</p>`);
+    return;
+  }
+  if (query) {
+    const q = query.toLowerCase().replace(/ё/g, "е");
+    const res = CITIES.filter(c => c.name.toLowerCase().replace(/ё/g, "е").includes(q)).sort((a, b) => b.pop - a.pop).slice(0, 40);
+    listEl.innerHTML = res.length ? res.map(c => `<div class="hubrow">${line(c, "", ` style="font-size:${c.hub ? 18 : 15}px"`)}</div>`).join("") : `<p class="empty">Такого города нет в списке.</p>`;
+    return;
+  }
+  listEl.innerHTML = HUBS.map(h => {
+    const subs = CITIES.filter(c => c.gi === h.gi && !c.hub);
+    const lit = subs.filter(c => marks[c.id] === "b").length;
+    const isOpen = open === h.gi;
+    let inner = "";
+    if (isOpen) {
+      const shown = showAll ? subs : subs.slice(0, 12);
+      inner = `<div class="subs">${shown.map(c => line(c, c.pop >= 1e5 ? "s1" : c.pop >= 2e4 ? "s2" : "s3")).join("")}${subs.length > shown.length ? `<button class="more" data-all="1">Показать все ${subs.length}</button>` : ""}</div>`;
+    }
+    const more = subs.length ? `<button class="more" data-open="${h.gi}" aria-expanded="${isOpen}">${isOpen ? "Свернуть" : `Ещё ${subs.length} ${plural(subs.length, "город", "города", "городов")} рядом`}${lit ? ` · <b>был в ${lit}</b>` : ""}</button>` : "";
+    return `<div class="hubrow" data-hub="${h.gi}">${line(h, "", ` style="font-size:${hubSize(h.pop)}px"`)}${more}${inner}</div>`;
+  }).join("");
+}
+
+function renderCard() {
+  const c = cardCity, m = marks[c.id] || "", g = G[c.gi], ct = CONTENT[c.name], t = tripOf(c.id), b = budget(c, t);
+  const max = Math.max(...b.parts.map(p => p[1]), 1);
+  const homeOpts = HUBS.map(h => `<option value="${esc(h.id)}"${h.id === t.from ? " selected" : ""}>${esc(h.name)}</option>`).join("");
+  const done = stepsDone(c, t);
+  const step = (ok, title, sub, act) => `<div class="step ${ok ? "done" : ""}"><span class="ck">${ok ? "✓" : ""}</span><div class="tx"><b>${title}</b><span>${sub}</span></div>${act || ""}</div>`;
+  const track = m === "w" || (m === "b" && trips[c.id]) ? `
+    <div class="sec"><h3>Трек поездки <small>${done} из 5</small></h3><div class="box steps">
+      ${step(!!t.date, "Выбрать даты", t.date ? "заезд " + new Date(t.date + "T00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "когда хочешь поехать", `<input type="date" id="tDate" value="${t.date}" aria-label="Дата поездки">`)}
+      ${step(t.budget, "Посчитать бюджет", t.budget ? `≈ ${kRub(b.total)} тыс. ₽ на поездку` : "ниже, по твоим параметрам", `<button class="act" data-step="budget">${t.budget ? "Изменить" : "Подходит"}</button>`)}
+      ${step(t.tickets, "Купить билеты", b.mode, t.tickets ? `<button class="act" data-step="tickets">Отменить</button>` : `<a href="${TRAVEL}" target="_blank" rel="noopener" data-after="tickets">Найти →</a>`)}
+      ${step(t.hotel, "Забронировать жильё", `${b.nights} ${plural(b.nights, "ночь", "ночи", "ночей")}`, t.hotel ? `<button class="act" data-step="hotel">Отменить</button>` : `<a href="${TRAVEL}" target="_blank" rel="noopener" data-after="hotel">Найти →</a>`)}
+      ${step(m === "b", "Съездить", m === "b" ? "точка на карте стала сплошной" : "после поездки отметь, и город станет твоим", m === "b" ? "" : `<button class="act" data-k="b" data-id="${esc(c.id)}">Я съездил</button>`)}
+    </div></div>` : "";
+  cardEl.innerHTML = `
+    <button class="back" id="back">← К списку</button>
+    <div class="eyebrow">${esc(g.t)}</div>
+    <h1 class="cname ${m}">${esc(c.name)}</h1>
+    <div class="cmeta">${fmtPop(c.pop)} жителей</div>
+    <div class="bigmarks">
+      <button class="bigmark" data-k="b" data-id="${esc(c.id)}" aria-pressed="${m === "b"}"><svg class="pw" viewBox="-1 -1.1 2 2"><use href="#pinShape" fill="currentColor"/></svg>Был здесь</button>
+      <button class="bigmark" data-k="w" data-id="${esc(c.id)}" aria-pressed="${m === "w"}">${pinIcon("w", 18)}Хочу сюда</button>
+    </div>
+    ${track}
+    <div class="sec"><h3>Сколько стоит поездка <small>оценка</small></h3><div class="box calc">
+      <div class="row2">
+        <label class="fld">Откуда<select id="tFrom">${homeOpts}</select></label>
+        <div class="fld">Уровень<div class="seg"><button data-level="e" aria-pressed="${t.level === "e"}">Эконом</button><button data-level="c" aria-pressed="${t.level === "c"}">Комфорт</button></div></div>
+        <label class="fld">Как ехать<select id="tMode">${Object.entries(MODE_NAMES).map(([k, v]) => `<option value="${k}"${(t.mode || "") === k ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+        <div class="fld">Дней<div class="stepper"><button data-days="-1" aria-label="Меньше дней">−</button><b>${t.days}</b><button data-days="1" aria-label="Больше дней">+</button></div></div>
+        <div class="fld">Человек<div class="stepper"><button data-ppl="-1" aria-label="Меньше людей">−</button><b>${t.people}</b><button data-ppl="1" aria-label="Больше людей">+</button></div></div>
+      </div>
+      <div class="total"><b>${kRub(b.total * .88)}–${kRub(b.total * 1.12)} тыс. ₽</b><span>${t.days} ${plural(t.days, "день", "дня", "дней")} на ${t.people} ${plural(t.people, "человека", "человек", "человек")}</span></div>
+      <div class="brk">${b.parts.map(([n, v, s]) => `<div class="br"><span>${n}</span><em>${rub(v)}</em><div class="bar"><i style="width:${v / max * 100}%"></i></div><small>${esc(s)}</small></div>`).join("")}</div>
+      <p class="note">Ориентир прототипа по средним ценам. Точные цены билетов и отелей на твои даты — в поиске СберТревел.</p>
+    </div></div>
+    ${ct ? `
+    <div class="sec"><h3>Обязательно попробовать</h3><div class="box list3">${ct.try.map((x, i) => `<div class="it"><span class="n">${i + 1}</span><div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div></div>`).join("")}</div></div>
+    <div class="sec"><h3>Главный сувенир</h3><div class="souv"><b>${esc(ct.souvenir[0])}</b><span>${esc(ct.souvenir[1])}</span></div></div>
+    <div class="sec"><h3>Где сделать фото</h3><div class="box list3">${ct.photo.map((x, i) => `<div class="it"><span class="n">${i + 1}</span><div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div></div>`).join("")}</div></div>`
+    : `<div class="sec"><p class="empty">Подборку еды, сувениров и фото-мест для этого города мы ещё собираем. Сейчас она есть для ${Object.keys(CONTENT).length} популярных городов.</p></div>`}
+    <a class="cta" href="${TRAVEL}" target="_blank" rel="noopener">Найти билеты и отели в СберТревел<small>до 99% стоимости можно оплатить бонусами Спасибо</small></a>`;
+  document.getElementById("back").onclick = closeCard;
+  const d = document.getElementById("tDate"); if (d) d.onchange = e => { t.date = e.target.value; save(); renderCard(); };
+  document.getElementById("tFrom").onchange = e => { t.from = e.target.value; save(); renderCard(); };
+  document.getElementById("tMode").onchange = e => { t.mode = e.target.value; save(); renderCard(); };
+}
+function openCard(c) {
+  cardCity = c; focus = c; open = c.hub ? open : c.gi;
+  homeEl.hidden = true; cardEl.hidden = false; renderCard(); panel.scrollTop = 0; dirty = true;
+}
+function closeCard() {
+  cardCity = null; focus = null; homeEl.hidden = false; cardEl.hidden = true; renderList(); dirty = true;
+}
+function setMark(id, k) {
+  if (marks[id] === k) delete marks[id]; else marks[id] = k;
+  if (marks[id] === "b" && !reduce) anims.push({ id, t0: performance.now() });
+  if (marks[id] === "w") tripOf(id);
+  save(); dirty = true; renderStats();
+  if (cardCity) renderCard(); else renderList();
+}
+panel.addEventListener("click", e => {
+  const a = e.target.closest("a[data-after]");
+  if (a && cardCity) { const t = tripOf(cardCity.id); t[a.dataset.after] = true; save(); setTimeout(renderCard, 50); return; }
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.tab) { tab = b.dataset.tab; renderList(); return; }
+  if (b.dataset.g) { const gr = TAG_GROUPS.find(x => x.key === b.dataset.g), v = b.dataset.t; if (gr.multi) { const s = pick.sel[gr.key]; s.has(v) ? s.delete(v) : s.add(v); } else pick.sel[gr.key] = v; renderPick(); return; }
+  if (b.dataset.swipe) { decide(b.dataset.swipe); return; }
+  if (b.dataset.k) return setMark(b.dataset.id, b.dataset.k);
+  if (b.dataset.card) return openCard(byId.get(b.dataset.card));
+  if (b.dataset.open !== undefined) { const gi = +b.dataset.open; open = open === gi ? null : gi; showAll = false; renderList(); dirty = true; return; }
+  if (b.dataset.all) { showAll = true; renderList(); return; }
+  if (!cardCity) return;
+  const t = tripOf(cardCity.id);
+  if (b.dataset.step) { t[b.dataset.step] = !t[b.dataset.step]; }
+  else if (b.dataset.level) t.level = b.dataset.level;
+  else if (b.dataset.days) t.days = Math.min(21, Math.max(1, t.days + +b.dataset.days));
+  else if (b.dataset.ppl) t.people = Math.min(8, Math.max(1, t.people + +b.dataset.ppl));
+  else return;
+  save(); renderCard();
+});
+document.getElementById("ringBan").onclick = () => {
+  if (tab === "ring") { tab = "all"; renderList(); d3.select(cv).transition().duration(reduce ? 0 : 800).call(zoom.transform, d3.zoomIdentity); return; }
+  tab = "ring"; renderList();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of RING) { const x = ox + s0 * c.px, y = oy + s0 * c.py; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const kk = Math.min(40, .55 * Math.min(cw / Math.max(8, x1 - x0), ch / Math.max(8, y1 - y0)));
+  d3.select(cv).transition().duration(reduce ? 0 : 900).ease(d3.easeCubicInOut).call(zoom.transform, d3.zoomIdentity.translate(cw / 2 - kk * (x0 + x1) / 2, ch / 2 - kk * (y0 + y1) / 2).scale(kk));
+};
+document.getElementById("q").addEventListener("input", e => { query = e.target.value.trim(); renderList(); });
+
+// ---------- Gen UI: «Подбор» ----------
+const TAG_GROUPS = [
+  { key: "mood", title: "Хочется", multi: true, items: ["Золотое кольцо", "Активный отдых", "Нишевые места", "Гастро", "Море", "Горы и походы", "Природа", "Арт и урбан", "Спа и перезагрузка", "Для фото", "История", "Тишина", "Большой город"] },
+  { key: "how", title: "Дорога", items: ["Электричка", "Машина", "Поезд", "Ночной поезд", "Самолёт", "Не важно"] },
+  { key: "who", title: "С кем", items: ["Один", "Вдвоём", "С детьми", "С друзьями", "С собакой"] },
+  { key: "when", title: "Когда", items: ["На день", "На выходные", "В отпуск"] },
+  { key: "money", title: "Бюджет на всех", items: ["До 30 тыс.", "До 60 тыс.", "Не важно"] },
+];
+const pick = { hours: {}, sel: { mood: new Set(), how: "Не важно", who: "Вдвоём", when: "На выходные", money: "До 60 тыс." }, text: "", from: homeDefault.id, cards: [], idx: 0, loading: false, ai: false, note: "", ctl: null, liked: 0, been: 0 };
+const HOW = {
+  "Электричка": { mode: "el", min: 25, hmin: .5, hmax: 3, def: 1, km: h => (h - .1) * 70 },
+  "Машина": { mode: "car", min: 40, hmin: 1, hmax: 8, def: 2, km: h => h * 80 / 1.2 },
+  "Поезд": { mode: "train", min: 50, hmin: 1, hmax: 12, def: 4, km: h => (h - .3) * 90 / 1.2 },
+  "Ночной поезд": { mode: "night", min: 400, max: 1000 },
+  "Самолёт": { mode: "plane", min: 500, hmin: 1.5, hmax: 9, def: 3, km: h => (h - .6) * 750 },
+  "Не важно": { mode: "", min: 0, max: 1e9 } };
+const hoursFmt = h => (Number.isInteger(h) ? String(h) : String(h).replace(".", ",")) + " ч";
+function pickParams() {
+  const s = pick.sel;
+  const days = s.when === "На день" ? 1 : s.when === "На выходные" ? 2 : s.when === "В отпуск" ? 6 : 3;
+  const H = HOW[s.how] || HOW["Не важно"];
+  const hrs = H.km ? (pick.hours[s.how] ?? H.def) : null;
+  const kmMax = H.km ? Math.max(H.min + 10, H.km(hrs)) : H.max;
+  const howLabel = H.km ? `${s.how.toLowerCase()} до ${hoursFmt(hrs)}` : s.how === "Не важно" ? "не важно" : "ночной поезд";
+  const people = { "Один": 1, "Вдвоём": 2, "С детьми": 3, "С друзьями": 4, "С собакой": 2 }[s.who] || 2;
+  const limit = s.money === "До 30 тыс." ? 30000 : s.money === "До 60 тыс." ? 60000 : null;
+  return { days, people, level: limit ? "e" : "c", from: pick.from, limit, mode: H.mode, kmMin: H.min, kmMax, how: howLabel };
+}
+function candidates() {
+  const p = pickParams(), from = byId.get(pick.from) || homeDefault, seen = new Set(), out = [];
+  if (pick.sel.mood.has("Золотое кольцо")) return RING.filter(c => c.id !== from.id).map(c => ({ c, km: Math.round(distKm(from, c)) }));
+  const ranged = p.kmMax < 1e9;
+  const pool = ranged ? [...CITIES].sort((a, b) => (CONTENT[b.name] ? 1 : 0) - (CONTENT[a.name] ? 1 : 0) || b.pop - a.pop)
+    : [...HUBS, ...Object.keys(CONTENT).map(n => CITIES.find(x => x.name === n)).filter(Boolean)];
+  for (const c of pool) {
+    if (seen.has(c.name) || c.id === from.id) continue;
+    const km = Math.round(distKm(from, c));
+    if (km < p.kmMin || km > p.kmMax) continue;
+    seen.add(c.name); out.push({ c, km });
+    if (out.length >= 90) break;
+  }
+  return out;
+}
+const TONES = { sunset: "linear-gradient(150deg,#ffb38a,#ff7f9f)", sea: "linear-gradient(150deg,#6ec6ff,#5b7cff)", mint: "linear-gradient(150deg,#4fd1b0,#2a9a8c)", lavender: "linear-gradient(150deg,#b8a2ff,#7a5cf0)" };
+const RULES = {
+  "Золотое кольцо": RING.map(c => c.name),
+  "Море": ["Сочи", "Калининград", "Владивосток", "Петропавловск-Камчатский", "Махачкала", "Дербент", "Мурманск"],
+  "Горы и походы": ["Горно-Алтайск", "Сочи", "Махачкала", "Петропавловск-Камчатский"],
+  "Активный отдых": ["Горно-Алтайск", "Сочи", "Петропавловск-Камчатский", "Мурманск", "Иркутск"],
+  "Природа": ["Иркутск", "Горно-Алтайск", "Петропавловск-Камчатский", "Мурманск", "Архангельск", "Астрахань"],
+  "Гастро": ["Казань", "Дербент", "Калининград", "Санкт-Петербург", "Владивосток", "Уфа"],
+  "Нишевые места": ["Дербент", "Архангельск", "Вологда", "Псков", "Киров", "Астрахань"],
+  "Арт и урбан": ["Екатеринбург", "Пермь", "Нижний Новгород", "Санкт-Петербург", "Москва"],
+  "Спа и перезагрузка": ["Сочи", "Горно-Алтайск", "Суздаль", "Калининград"],
+  "Для фото": ["Санкт-Петербург", "Казань", "Калининград", "Мурманск", "Дербент", "Суздаль"],
+  "История": ["Суздаль", "Владимир", "Великий Новгород", "Псков", "Тула", "Кострома", "Дербент", "Казань"],
+  "Большой город": ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Нижний Новгород"],
+  "Тишина": ["Суздаль", "Кострома", "Вологда", "Псков", "Горно-Алтайск"],
+};
+function ruleCards() {
+  const p = pickParams(), mood = [...pick.sel.mood];
+  const scored = candidates().filter(({ c }) => !marks[c.id]).map(({ c, km }) => {
+    if (p.kmMax < 1e9) return { c, km, s: (CONTENT[c.name] ? 3 : 0) + Math.log10(c.pop) + Math.random() * .8 };
+    let s = 0; for (const m of mood) if (RULES[m]?.includes(c.name)) s += 3;
+    if (!CONTENT[c.name]) s -= 5;
+    if (p.days <= 2) s += km < 800 ? 2 : -3;
+    if (p.limit && budget(c, { ...p }).total > p.limit) s -= 2;
+    return { c, s: s + Math.random() * .5 };
+  }).sort((a, b) => b.s - a.s).slice(0, 6);
+  return scored.map(({ c }) => {
+    const ct = CONTENT[c.name], m = mood.find(x => RULES[x]?.includes(c.name));
+    if (!ct) { const bb = budget(c, { ...p }); return { c, headline: `${bb.time} в пути`, why: `Ближе, чем кажется: можно съездить ${p.days === 1 ? "на день" : "на выходные"} без долгой дороги.`, tags: [p.how, pick.sel.when].filter(x => x && x !== "не важно"), tone: "mint", blocks: ["route", "budget"] }; }
+    return { c, headline: ct.photo[0][0], why: m ? `Подходит под «${m.toLowerCase()}»: ${ct.photo[0][1]}.` : `${ct.souvenir[0]} и ${ct.try[0][0].toLowerCase()} — повод съездить.`,
+      tags: [m, pick.sel.when].filter(Boolean), tone: m === "Море" ? "sea" : m === "Горы" || m === "Природа" ? "mint" : m === "История" ? "lavender" : "sunset", blocks: ["budget", "try", "photo"] };
+  });
+}
+async function generate(fresh) {
+  pick.loading = true; pick.cards = []; pick.idx = 0; pick.note = ""; pick.liked = 0; pick.been = 0; renderPick();
+  const p = pickParams(), from = byId.get(pick.from) || homeDefault;
+  const tags = [...pick.sel.mood, pick.sel.who, pick.sel.when, pick.sel.money].filter(Boolean).join(", ");
+  const been = CITIES.filter(c => marks[c.id] === "b").map(c => c.name).slice(0, 40).join(", ") || "нет";
+  const want = CITIES.filter(c => marks[c.id] === "w").map(c => c.name).slice(0, 40).join(", ") || "нет";
+  const list = candidates().map(({ c, km }) => `${c.name} | ${G[c.gi].t} | ${fmtPop(c.pop)} | ${km} км | ${budget(c, { ...p }).time} (${MODES[budget(c, { ...p }).mk].label.split(" ")[0]}) | подборка: ${CONTENT[c.name] ? "да" : "нет"}`).join("\n");
+  const prompt = `Ты подбираешь поездки по России для приложения СберТревел и собираешь интерфейс карточек.
+Запрос пользователя — теги: ${tags || "не выбраны"}. Его слова: «${pick.text || "—"}». Едет из: ${from.name}. Дорога: ${p.how}. Дней: ${p.days}. Людей: ${p.people}. ${p.limit ? "Бюджет до " + p.limit + " ₽ на всех." : "Бюджет не ограничен."}
+Уже был: ${been}. Уже в планах: ${want}. Эти города не предлагай.
+Выбери до 6 городов ТОЛЬКО из списка ниже, название пиши точно как в списке: список уже отфильтрован по дороге. Если выбраны «Нишевые места», предпочитай малые и необычные города, а не столицы регионов. «Активный отдых» — походы, сплавы, велосипед, горы. На выходные без ограничения дороги — ближе 800 км. Разнообразь направления.
+Для каждого города собери карточку: выбери 2–3 блока из "budget" (стоимость, посчитает приложение), "route" (как добраться, посчитает приложение), "try" (что попробовать), "photo" (где фото, только если подборка: да), "season" (когда лучше ехать), "fact" (удивительный общеизвестный факт) — в том порядке, который лучше продаёт этот город под этот запрос. Тон обложки: "sunset", "sea", "mint" или "lavender" под настроение города.
+Пиши по-русски, коротко, без восклицательных знаков, без цен и выдуманных цифр.
+Ответь только JSON: {"cards":[{"city":"Казань","headline":"до 50 символов","why":"почему подходит под запрос, до 130 символов","tags":["2–3 тега по 1–2 слова"],"tone":"sunset","blocks":["budget","try","season"],"try":"только если город без подборки: блюдо и пара слов","season":"если выбран season","fact":"если выбран fact"}]}
+Список городов (название | регион | население | расстояние от ${from.name} | время в пути | подборка):
+${list}`;
+  if (!candidates().filter(({ c }) => !marks[c.id]).length) { pick.loading = false; pick.note = "В этом радиусе нет городов из справочника. Выбери другую дорогу или город отправления."; renderPick(); return; }
+  let sample = null;
+  try { sample = (await window.claude?.use?.("sample")) ?? null; } catch (e) { sample = null; }
+  let cards = null;
+  if (sample) {
+    pick.ctl = new AbortController();
+    try {
+      const opts = { modelTier: "quick", signal: pick.ctl.signal }; if (fresh) opts.cache = false;
+      const res = await sample.json(prompt, opts);
+      const byName = new Map(candidates().map(({ c }) => [c.name, c]));
+      cards = (Array.isArray(res?.cards) ? res.cards : []).map(x => ({ ...x, c: byName.get(String(x.city || "").trim()) }))
+        .filter(x => x.c && !marks[x.c.id]).slice(0, 6)
+        .map(x => ({ c: x.c, headline: String(x.headline || "").slice(0, 70), why: String(x.why || "").slice(0, 180), tags: (Array.isArray(x.tags) ? x.tags : []).slice(0, 3).map(String),
+          tone: TONES[x.tone] ? x.tone : "sunset", blocks: (Array.isArray(x.blocks) ? x.blocks : []).map(String).filter(b => ["budget", "route", "try", "photo", "season", "fact"].includes(b)).slice(0, 3),
+          try: x.try ? String(x.try).slice(0, 120) : "", season: x.season ? String(x.season).slice(0, 140) : "", fact: x.fact ? String(x.fact).slice(0, 160) : "" }));
+      if (!cards.length) { cards = null; pick.note = "ИИ не нашёл подходящих городов, показываем подборку по тегам."; }
+      else pick.ai = true;
+    } catch (e) {
+      if (e?.code === "cancelled") { pick.loading = false; renderPick(); return; }
+      pick.note = e?.code === "not_granted" || e?.code === "sampling_disabled" ? "ИИ выключен для этой страницы, показываем подборку по тегам." : "ИИ сейчас не ответил, показываем подборку по тегам.";
+    }
+  } else pick.note = "ИИ недоступен в этом просмотре, показываем подборку по тегам.";
+  if (!cards) { cards = ruleCards(); pick.ai = false; }
+  cards.forEach(x => { if (!x.blocks.length) x.blocks = ["budget", "try"]; });
+  pick.cards = cards; pick.loading = false; renderPick();
+}
+function blockHTML(card, b, p) {
+  const c = card.c, ct = CONTENT[c.name];
+  const box = (k, v) => `<div class="blk"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  if (b === "budget") { const bb = budget(c, { ...p }); const over = p.limit && bb.total * .88 > p.limit; return box("Сколько стоит", `≈ <b>${kRub(bb.total * .88)}–${kRub(bb.total * 1.12)} тыс. ₽</b> · ${p.days} ${plural(p.days, "день", "дня", "дней")} · ${p.people} чел. · ${esc(bb.time)} в пути${over ? `<span class="warn">выше бюджета</span>` : ""}`); }
+  if (b === "route") { const bb = budget(c, { ...p }); return box("Как добраться", `<b>${esc(bb.time)}</b> · ${esc(bb.from.name)} → ${esc(c.name)} · ${esc(MODES[bb.mk].label.replace(" туда-обратно", ""))} · ${Math.round(bb.km).toLocaleString("ru-RU")} км`); }
+  if (b === "try") { const v = ct ? ct.try.slice(0, 2).map(x => esc(x[0])).join(" · ") : esc(card.try); return v ? box("Попробовать", v) : ""; }
+  if (b === "photo") { return ct ? box("Где фото", ct.photo.slice(0, 2).map(x => esc(x[0])).join(" · ")) : ""; }
+  if (b === "season") return card.season ? box("Когда ехать", esc(card.season)) : "";
+  if (b === "fact") return card.fact ? box("Знаешь ли ты", esc(card.fact)) : "";
+  return "";
+}
+function cardHTML(card, depth, p) {
+  const c = card.c;
+  return `<div class="gcard" data-depth="${depth}" style="--d:${depth}">
+    <div class="hero" style="background:${TONES[card.tone]}">
+      <div class="rg">${esc(G[c.gi].t)}</div><h4>${esc(c.name)}</h4>${card.headline ? `<div class="hl">${esc(card.headline)}</div>` : ""}
+      <span class="stamp like">ХОЧУ</span><span class="stamp nope">НЕ СЕЙЧАС</span>
+    </div>
+    <div class="body">${card.why ? `<p class="why">${esc(card.why)}</p>` : ""}${card.tags.length ? `<div class="tg">${card.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}${card.blocks.map(b => blockHTML(card, b, p)).join("")}
+      <button class="more open" data-card="${esc(c.id)}">Открыть карточку города →</button></div>
+  </div>`;
+}
+function renderPick() {
+  const p = pickParams();
+  const chips = TAG_GROUPS.map(g => `<div class="grp"><div class="gt">${g.title}</div><div class="chips">${g.items.map(t => { const on = g.multi ? pick.sel[g.key].has(t) : pick.sel[g.key] === t; return `<button class="chip" data-g="${g.key}" data-t="${esc(t)}" aria-pressed="${on}">${esc(t)}</button>`; }).join("")}</div></div>`).join("");
+  const H = HOW[pick.sel.how], hrs = H?.km ? (pick.hours[pick.sel.how] ?? H.def) : null;
+  const slider = H?.km ? `<div class="grp slider"><div class="gt">Сколько готов ехать в одну сторону</div><div class="sl"><input type="range" id="hrs" min="${H.hmin}" max="${H.hmax}" step="0.5" value="${hrs}" aria-label="Часов в пути"><b id="hrsV">до ${hoursFmt(hrs)}</b></div><small id="hrsKm">≈ до ${Math.round(H.km(hrs))} км от города отправления</small></div>` : "";
+  const fromOpts = HUBS.map(h => `<option value="${esc(h.id)}"${h.id === pick.from ? " selected" : ""}>${esc(h.name)}</option>`).join("");
+  let deck = "";
+  if (pick.loading) deck = `<div class="deck"><div class="gcard skel" style="--d:1"></div><div class="gcard skel" style="--d:0"><div class="hero" style="background:${TONES.sunset}"><div class="rg">✦ ИИ подбирает города</div><h4>Собираю подборку…</h4><div class="hl">выбираю города и блоки под твой запрос</div></div><div class="body"><div class="sk"></div><div class="sk short"></div><div class="sk"></div></div></div></div><div class="deckbtns"><button class="rb been" id="stopGen">Остановить</button></div>`;
+  else if (pick.cards.length && pick.idx < pick.cards.length) {
+    const vis = pick.cards.slice(pick.idx, pick.idx + 3);
+    deck = `<div class="genlbl">${pick.ai ? "✦ Собрано ИИ под твой запрос" : "Подборка по тегам"} · ${pick.idx + 1} из ${pick.cards.length}</div>
+      <div class="deck" id="deck">${vis.map((cd, i) => cardHTML(cd, i, p)).reverse().join("")}</div>
+      <div class="deckbtns"><button class="rb nope" data-swipe="skip" aria-label="Не сейчас">✕</button><button class="rb been" data-swipe="b">Был там</button><button class="rb like" data-swipe="w" aria-label="Хочу">♥</button></div>
+      <p class="hint">Свайп вправо — хочу, влево — не сейчас</p>`;
+  } else if (pick.cards.length) {
+    deck = `<div class="done"><b>Подборка закончилась</b><span>В «Мои поездки» добавлено: ${pick.liked}. Отмечено «был»: ${pick.been}.</span>
+      <div class="deckbtns"><button class="rb been" id="regen">Ещё подборку</button><button class="rb been" data-tab="trips">Мои поездки</button></div></div>`;
+  }
+  const chipsHtml = chips.replace('<div class="grp"><div class="gt">С кем</div>', slider + '<div class="grp"><div class="gt">С кем</div>');
+  listEl.innerHTML = `<div class="pick">
+    <p class="lead">Выбери настроение или напиши своими словами. ИИ соберёт колоду городов и сам решит, что показать на каждой карточке.</p>
+    ${chipsHtml}
+    <div class="grp"><div class="gt">Своими словами</div><textarea id="pickText" rows="2" placeholder="Например: тёплое место без толп, вкусно поесть, недалеко от Москвы">${esc(pick.text)}</textarea></div>
+    <div class="grp row"><label class="fld">Откуда<select id="pickFrom">${fromOpts}</select></label></div>
+    <button class="gobtn" id="go">${pick.cards.length ? "Собрать заново" : "Собрать подборку"} ✦</button>
+    ${pick.note ? `<p class="note">${esc(pick.note)}</p>` : ""}
+    ${deck}
+  </div>`;
+  const cur = pick.cards[pick.idx];
+  focus = !pick.loading && cur ? cur.c : null; dirty = true;
+  document.getElementById("pickText").oninput = e => { pick.text = e.target.value; };
+  document.getElementById("pickFrom").onchange = e => { pick.from = e.target.value; };
+  const hr = document.getElementById("hrs");
+  if (hr) hr.oninput = e => { const v = Number(e.target.value); pick.hours[pick.sel.how] = v; document.getElementById("hrsV").textContent = "до " + hoursFmt(v); document.getElementById("hrsKm").textContent = `≈ до ${Math.round(HOW[pick.sel.how].km(v))} км от города отправления`; };
+  document.getElementById("go").onclick = () => generate(pick.cards.length > 0);
+  const rg = document.getElementById("regen"); if (rg) rg.onclick = () => generate(true);
+  const st = document.getElementById("stopGen"); if (st) st.onclick = () => pick.ctl?.abort();
+  attachSwipe();
+}
+function decide(kind) {
+  const card = pick.cards[pick.idx]; if (!card) return;
+  const id = card.c.id;
+  if (kind === "w") { marks[id] = "w"; const p = pickParams(), t = tripOf(id); Object.assign(t, { days: p.days, people: p.people, level: p.level, from: p.from, mode: p.mode || "" }); pick.liked++; }
+  if (kind === "b") { marks[id] = "b"; if (!reduce) anims.push({ id, t0: performance.now() }); pick.been++; }
+  save(); renderStats();
+  const top = document.querySelector('#deck .gcard[data-depth="0"]');
+  const go = () => { pick.idx++; renderPick(); };
+  if (top && !reduce) { top.style.transition = "transform .32s ease, opacity .32s ease"; top.style.transform = kind === "skip" ? "translate(-140%, 20px) rotate(-18deg)" : kind === "w" ? "translate(140%, 20px) rotate(18deg)" : "translateY(-130%)"; top.style.opacity = "0"; setTimeout(go, 300); }
+  else go();
+}
+function attachSwipe() {
+  const top = document.querySelector('#deck .gcard[data-depth="0"]'); if (!top) return;
+  let x0 = 0, y0 = 0, dx = 0, on = false;
+  const like = top.querySelector(".stamp.like"), nope = top.querySelector(".stamp.nope");
+  top.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; on = true; x0 = e.clientX; y0 = e.clientY; dx = 0; top.classList.add("drag"); top.setPointerCapture(e.pointerId); });
+  top.addEventListener("pointermove", e => { if (!on) return; dx = e.clientX - x0; const dy = (e.clientY - y0) * .2; top.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`; like.style.opacity = Math.max(0, Math.min(1, dx / 90)); nope.style.opacity = Math.max(0, Math.min(1, -dx / 90)); });
+  const end = () => { if (!on) return; on = false; top.classList.remove("drag"); if (dx > 100) decide("w"); else if (dx < -100) decide("skip"); else { top.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0; } };
+  top.addEventListener("pointerup", end); top.addEventListener("pointercancel", end);
+}
+
+// ---------- story share ----------
+const modal = document.getElementById("modal");
+let storyBlob = null;
+function roundRect(g, x, y, w, h, r) { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); }
+async function makeStory() {
+  try { await document.fonts?.ready; } catch (e) {}
+  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, W * .55, H); gr.addColorStop(0, "#ffc58f"); gr.addColorStop(.5, "#ff8fa3"); gr.addColorStop(1, "#9a86ff");
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const nb = Object.values(marks).filter(v => v === "b").length;
+  const regs = new Set(CITIES.filter(x => marks[x.id] === "b").map(x => x.gi)).size;
+  const wants = CITIES.filter(x => marks[x.id] === "w").sort((a, b) => b.pop - a.pop).slice(0, 3).map(x => x.name);
+  g.fillStyle = "#fff"; g.textBaseline = "alphabetic";
+  g.font = "600 34px Golos Text, sans-serif"; g.globalAlpha = .85; g.fillText("М О И   Г О Р О Д А", 80, 190); g.globalAlpha = 1;
+  g.font = "800 220px Unbounded, Arial Black, sans-serif"; g.fillText(String(nb), 72, 420);
+  const nw = g.measureText(String(nb)).width;
+  g.font = "600 64px Unbounded, Arial Black, sans-serif"; g.fillText(plural(nb, "город", "города", "городов"), 72 + nw + 30, 420);
+  g.font = "500 44px Golos Text, sans-serif"; g.globalAlpha = .95; g.fillText(`${regs} ${plural(regs, "регион", "региона", "регионов")} России`, 80, 500); g.globalAlpha = 1;
+  const rbs = RING.filter(x => marks[x.id] === "b").length;
+  if (rbs) { roundRect(g, 80, 535, 520, 64, 32); g.fillStyle = "rgba(255,241,204,.95)"; g.fill(); g.fillStyle = "#7a4e04"; g.font = "600 32px Golos Text, sans-serif"; g.fillText(`Золотое кольцо: ${rbs} из ${RING.length}`, 116, 578); g.fillStyle = "#fff"; }
+  const sc = 960 / DATA.W, ox2 = (W - DATA.W * sc) / 2, oy2 = 620;
+  g.save(); g.setTransform(sc, 0, 0, sc, ox2, oy2);
+  g.fillStyle = "rgba(255,255,255,.32)"; g.fill(ruPath); g.lineWidth = 2.2 / sc; g.strokeStyle = "rgba(255,255,255,.85)"; g.stroke(ruPath); g.restore();
+  const P = x => [ox2 + sc * x.px, oy2 + sc * x.py];
+  for (const x of CITIES) { if (marks[x.id] !== "w") continue; const [px, py] = P(x); g.fillStyle = "rgba(255,255,255,.6)"; g.strokeStyle = "#5a3bd0"; g.lineWidth = 4; g.setLineDash([7, 5]); pin(g, px, py, 30, "both"); g.setLineDash([]); }
+  for (const x of CITIES) { if (marks[x.id] !== "b") continue; const [px, py] = P(x); g.save(); g.shadowColor = "rgba(120,30,80,.4)"; g.shadowBlur = 16; g.shadowOffsetY = 5; g.fillStyle = "#fff"; pin(g, px, py, Math.max(26, 30 + 6 * Math.log10(Math.max(x.pop, 5e3) / 5e4)), "fill", "#e2557c"); g.restore(); }
+  let y = 1330;
+  if (wants.length) {
+    g.font = "600 30px Golos Text, sans-serif"; g.globalAlpha = .85; g.fillText("Д А Л Ь Ш Е   Х О Ч У", 80, y); g.globalAlpha = 1; y += 74;
+    g.font = "600 52px Unbounded, Arial Black, sans-serif";
+    for (const n of wants) { const w = g.measureText(n).width; const fs = w > 900 ? 40 : 52; g.font = `600 ${fs}px Unbounded, Arial Black, sans-serif`; g.fillText(n, 80, y); y += fs + 22; }
+  }
+  roundRect(g, 80, H - 230, W - 160, 120, 60); g.fillStyle = "rgba(255,255,255,.92)"; g.fill();
+  g.fillStyle = "#1f1b2e"; g.font = "700 40px Golos Text, sans-serif"; g.fillText("СберТревел", 130, H - 155);
+  g.font = "500 34px Golos Text, sans-serif"; g.textAlign = "right"; g.fillStyle = "#5236c0"; g.fillText("а у тебя сколько? →", W - 130, H - 155); g.textAlign = "left";
+  return await new Promise(r => c.toBlob(b => r({ blob: b, url: c.toDataURL("image/png") }), "image/png"));
+}
+async function openShare() {
+  const s = await makeStory(); storyBlob = s.blob;
+  document.getElementById("storyImg").src = s.url; modal.hidden = false;
+  let dl = null; try { dl = (await window.claude?.use?.("downloads")) ?? null; } catch (e) { dl = null; }
+  const btn = document.getElementById("saveImg");
+  btn.hidden = !dl;
+  document.getElementById("saveHint").textContent = dl ? "Картинка в формате сторис 9:16. Сохрани её и выложи в Instagram или ВКонтакте." : "Нажми и удерживай картинку (или правая кнопка мыши), чтобы сохранить её для сторис.";
+  btn.onclick = async () => {
+    try { await dl.save({ filename: "moi-goroda.png", data: storyBlob }); document.getElementById("saveHint").textContent = "Готово. Картинка сохранена, можно выкладывать."; }
+    catch (err) { if (err?.code !== "declined") document.getElementById("saveHint").textContent = "Не получилось сохранить здесь. Нажми и удерживай картинку, чтобы сохранить её."; }
+  };
+}
+document.getElementById("shareFab").onclick = openShare;
+document.getElementById("closeModal").onclick = () => { modal.hidden = true; };
+modal.addEventListener("click", e => { if (e.target === modal) modal.hidden = true; });
+
+new ResizeObserver(resize).observe(stage);
+resize(); renderList();
+document.fonts?.ready.then(() => { dirty = true; });
+requestAnimationFrame(loop);
+</script>
