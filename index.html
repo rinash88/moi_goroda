@@ -76,6 +76,31 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
 .reg em{font-style:normal;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--been-deep);flex:none}
 .reg i{position:absolute;left:0;bottom:0;height:3px;background:var(--been);border-radius:0 3px 3px 0}
 .reg:hover{border-color:#d6cff0}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mode{display:grid;gap:2px;text-align:left;padding:10px 12px;border-radius:14px;background:var(--card);border:1.5px solid var(--line);min-width:0;transition:border-color .15s,box-shadow .15s}
+.mode b{font-family:var(--f-display);font-weight:800;font-size:24px;line-height:1.05;font-variant-numeric:tabular-nums}
+.mode span{font-weight:600;font-size:14px;display:flex;align-items:center;gap:5px}
+.mode small{font-size:11.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mode.been b{color:var(--been-deep)} .mode.want b{color:var(--want-deep)} .mode.pick b{background:var(--sun);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mode:hover{border-color:#d6cff0}
+.mode.been[aria-selected="true"]{border-color:var(--been);background:var(--soft);box-shadow:0 4px 14px rgba(226,85,124,.15)}
+.mode.want[aria-selected="true"]{border-color:var(--want);background:var(--soft-w);box-shadow:0 4px 14px rgba(107,75,216,.15)}
+.mode.pick[aria-selected="true"]{border-color:#ff9a8f;background:#fff4ef;box-shadow:0 4px 14px rgba(255,140,120,.18)}
+.hint{margin:0;font-size:13.5px;color:var(--mute)}
+.line .tg{flex:1;min-width:0;display:flex;align-items:center;gap:10px;text-align:left;padding:4px 0;border-radius:10px}
+.line .tg .nm{flex:1;min-width:0}
+.ck{width:26px;height:26px;flex:none;border-radius:50%;border:2px solid #d9d3e8;display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;transition:background .15s,border-color .15s,transform .15s}
+.line .tg:hover .ck{border-color:var(--faint)}
+.ck.b.on{background:var(--been);border-color:var(--been);transform:scale(1.05)}
+.ck.w{border-style:dashed}
+.ck.w.on{background:var(--want);border-color:var(--want);border-style:solid}
+.line.on.b .nm{color:var(--been-deep)}
+.line.on.w .nm{color:var(--want-deep)}
+.tagm{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:999px;flex:none;order:3}
+.tagm.b{background:var(--soft);color:var(--been-deep)} .tagm.w{background:var(--soft-w);color:var(--want-deep)}
+.info{flex:none;width:30px;height:30px;border-radius:50%;color:var(--faint);font-size:20px;line-height:1}
+.info:hover{background:#f2eff7;color:var(--ink)}
+.subs .ck{width:22px;height:22px;font-size:11px}
 .search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
 .search::placeholder{color:var(--faint)}
 
@@ -260,13 +285,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
     <div id="home">
       <div class="top">
         <div class="brandrow"><div class="brand">Мои <em>города</em></div></div>
-        <div class="stats" id="stats"></div>
+        <div class="modes" id="modes" role="tablist" aria-label="Что делаем"></div>
+        <p class="hint" id="hint"></p>
         <button class="ringban" id="ringBan" aria-pressed="false"></button>
-        <div class="tabs" role="tablist">
-          <button class="tab gen" role="tab" data-tab="pick" aria-selected="true">✦ Подбор</button>
-          <button class="tab" role="tab" data-tab="all" aria-selected="false">Все города</button>
-          <button class="tab" role="tab" data-tab="trips" aria-selected="false">Мои поездки<span class="cnt" id="tripCnt" hidden>0</span></button>
-        </div>
         <input class="search" id="q" type="search" placeholder="Найти город" autocomplete="off">
       </div>
       <div id="list"></div>
@@ -615,8 +636,11 @@ document.getElementById("zout").onclick = () => d3.select(cv).transition().durat
 
 // ---------- panel ----------
 const homeEl = document.getElementById("home"), cardEl = document.getElementById("card"), listEl = document.getElementById("list"), panel = document.getElementById("panel");
-let query = "", showAll = false, tab = "pick", cardCity = null, statView = "";
+let query = "", showAll = false, tab = "been", cardCity = null, ringFilter = false;
 const hubSize = p => p >= 1e6 ? 26 : p >= 5e5 ? 21 : p >= 2.5e5 ? 18 : 16;
+const rowMark = c => { const m = marks[c.id] || "", on = m === (tab === "want" ? "w" : "b"), other = m && !on;
+  return `<span class="ck ${tab === "want" ? "w" : "b"} ${on ? "on" : ""}">${on ? (tab === "want" ? "♥" : "✓") : ""}</span>` + (other ? `<span class="tagm ${m}">${m === "b" ? "был" : "в планах"}</span>` : ""); };
+const row = (c, cls = "", style = "") => `<div class="line ${cls} ${marks[c.id] === (tab === "want" ? "w" : "b") ? "on " + (tab === "want" ? "w" : "b") : ""}" data-row="${esc(c.id)}"><button class="tg" data-tog="${esc(c.id)}" aria-pressed="${marks[c.id] === (tab === "want" ? "w" : "b")}">${rowMark(c)}<span class="nm"${style}>${esc(c.name)}${RING_IDS.has(c.id) ? `<span class="gr">Золотое кольцо</span>` : ""}</span></button><button class="info" data-card="${esc(c.id)}" aria-label="Карточка города ${esc(c.name)}">›</button></div>`;
 const pills = c => { const m = marks[c.id] || ""; return `<button class="pill" data-k="b" data-id="${esc(c.id)}" aria-pressed="${m === "b"}">${pinIcon("b")}был</button><button class="pill" data-k="w" data-id="${esc(c.id)}" aria-pressed="${m === "w"}">${pinIcon("w")}хочу</button>`; };
 const line = (c, cls = "", style = "") => `<div class="line ${cls} ${marks[c.id] || ""}" data-row="${esc(c.id)}"><button class="nm" data-card="${esc(c.id)}"${style}>${esc(c.name)}${RING_IDS.has(c.id) ? `<span class="gr">Золотое кольцо</span>` : ""}</button>${pills(c)}</div>`;
 
@@ -626,14 +650,13 @@ function renderStats() {
   document.getElementById("hudN").textContent = nb;
   document.getElementById("hudL").textContent = plural(nb, "город", "города", "городов");
   document.getElementById("hudP").textContent = regs + " " + plural(regs, "регион", "региона", "регионов");
-  document.getElementById("stats").innerHTML =
-    `<button class="stat been" data-stat="been" aria-pressed="${tab === "trips" && statView === "been"}"><i class="go">›</i><b>${nb}</b><span>${pinIcon("b", 12)} ${plural(nb, "город", "города", "городов")}, где был</span></button>` +
-    `<button class="stat been" data-stat="regions" aria-pressed="${tab === "regions"}"><i class="go">›</i><b>${regs}</b><span>${plural(regs, "регион", "региона", "регионов")} из ${G.length}</span></button>` +
-    `<button class="stat want" data-stat="want" aria-pressed="${tab === "trips" && statView === "want"}"><i class="go">›</i><b>${nw}</b><span>${pinIcon("w", 12)} хочу поехать</span></button>`;
-  const cnt = document.getElementById("tripCnt"); cnt.hidden = !nw; cnt.textContent = nw;
+  document.getElementById("modes").innerHTML =
+    `<button class="mode been" role="tab" data-mode="been" aria-selected="${tab === "been"}"><b>${nb}</b><span>${pinIcon("b", 12)} Был</span><small>${regs} ${plural(regs, "регион", "региона", "регионов")}</small></button>` +
+    `<button class="mode want" role="tab" data-mode="want" aria-selected="${tab === "want"}"><b>${nw}</b><span>${pinIcon("w", 12)} Хочу</span><small>${nw ? "мои поездки" : "куда поехать"}</small></button>` +
+    `<button class="mode pick" role="tab" data-mode="pick" aria-selected="${tab === "pick"}"><b>✦</b><span>Подбор</span><small>с ИИ</small></button>`;
   const rb = RING.filter(c => marks[c.id] === "b").length;
   const ban = document.getElementById("ringBan");
-  ban.setAttribute("aria-pressed", tab === "ring");
+  ban.setAttribute("aria-pressed", ringFilter); ban.hidden = tab === "pick";
   ban.innerHTML = `<span class="rt"><b>Золотое кольцо</b><small>${rb === RING.length ? "Собрано целиком" : rb ? `Был в ${rb} из ${RING.length}. Ещё ${RING.length - rb}, и кольцо замкнётся` : "10 городов классического маршрута. Собери все"}</small></span><span class="rd">${RING.map(c => `<i class="${marks[c.id] === "b" ? "on" : marks[c.id] === "w" ? "w" : ""}"></i>`).join("")}</span>`;
 }
 function tripCard(c) {
@@ -647,54 +670,45 @@ function tripCard(c) {
 }
 function renderList() {
   renderStats();
-  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
-  document.getElementById("q").hidden = tab !== "all";
-  ringMode = tab === "ring"; dirty = true;
+  const q = document.getElementById("q"); q.hidden = tab === "pick" || ringFilter;
+  document.getElementById("hint").textContent = tab === "been" ? "Нажми на город, в котором был. Ещё раз — снять отметку." : tab === "want" ? "Нажми на город, куда хочешь поехать. Для него посчитаем бюджет и шаги до билета." : "";
+  document.getElementById("hint").hidden = tab === "pick";
+  ringMode = ringFilter && tab !== "pick"; dirty = true;
   if (tab === "pick") { renderPick(); return; }
-  if (tab === "ring") {
+  if (!cardCity) focus = null;
+  let head = "";
+  if (tab === "want") {
+    const w = CITIES.filter(c => marks[c.id] === "w").sort((a, b) => b.pop - a.pop);
+    head = w.length ? `<div class="sec" style="margin-top:4px"><h3>Мои поездки <small>${w.length}</small></h3></div>${w.map(tripCard).join("")}<div class="sec"><h3>Добавить ещё</h3></div>` : "";
+  }
+  if (ringFilter) {
     const left = RING.filter(c => !marks[c.id]);
-    listEl.innerHTML = `<p class="empty" style="padding-top:4px">Классический маршрут: 8 городов 1967 года, Углич (с 2018) и Рыбинск (с 2025). Отмечай, где был: участки кольца на карте становятся золотыми.</p>`
-      + RING.map((c, i) => `<div class="hubrow ringrow"><span class="ri">${i + 1}</span>${line(c, "", ` style="font-size:17px"`)}</div>`).join("")
-      + (left.length ? `<button class="gobtn" id="ringAll" style="margin-top:16px">Добавить в «хочу» оставшиеся ${left.length}</button>` : `<p class="empty">Кольцо собрано целиком. Можно хвастаться в сторис.</p>`);
+    listEl.innerHTML = head + `<p class="empty" style="padding-top:4px">Классический маршрут: 8 городов 1967 года, Углич (с 2018) и Рыбинск (с 2025). Участки кольца на карте становятся золотыми, когда ты был в соседних городах.</p>`
+      + RING.map((c, i) => `<div class="hubrow ringrow"><span class="ri">${i + 1}</span>${row(c, "", ` style="font-size:17px"`)}</div>`).join("")
+      + (tab === "want" && left.length ? `<button class="gobtn" id="ringAll" style="margin-top:16px">Хочу во все оставшиеся ${left.length}</button>` : "")
+      + `<button class="more" id="ringOff" style="margin-top:14px">← Все города</button>`;
     const ra = document.getElementById("ringAll");
     if (ra) ra.onclick = () => { for (const c of left) { marks[c.id] = "w"; tripOf(c.id); } save(); renderList(); };
-    return;
-  }
-  if (!cardCity) focus = null;
-  if (tab === "regions") {
-    const FD = ["Центральный", "Северо-Западный", "Южный", "Северо-Кавказский", "Приволжский", "Уральский", "Сибирский", "Дальневосточный"];
-    const st = G.map((g, gi) => ({ g, gi, n: g.c.length, b: CITIES.filter(c => c.gi === gi && marks[c.id] === "b").length }));
-    listEl.innerHTML = `<p class="empty" style="padding-top:4px">Регионы, где ты был, — по федеральным округам. Нажми на регион, чтобы раскрыть его города.</p>`
-      + FD.map(fd => { const rs = st.filter(r => r.g.fd === fd).sort((a, b) => b.b - a.b || b.g.c[0][3] - a.g.c[0][3]); const lit = rs.filter(r => r.b).length;
-        return `<div class="sec"><h3>${fd} <small>${lit} из ${rs.length}</small></h3></div><div class="regs">${rs.map(r => `<button class="reg ${r.b ? "on" : ""}" data-region="${r.gi}"><span>${esc(r.g.t)}</span><em>${r.b ? `${r.b} из ${r.n}` : "—"}</em>${r.b ? `<i style="width:${Math.max(6, r.b / r.n * 100)}%"></i>` : ""}</button>`).join("")}</div>`; }).join("");
-    return;
-  }
-  if (tab === "trips") {
-    const w = CITIES.filter(c => marks[c.id] === "w").sort((a, b) => b.pop - a.pop);
-    const bl = CITIES.filter(c => marks[c.id] === "b").sort((a, b) => b.pop - a.pop);
-    listEl.innerHTML = `<div class="sec" id="secWant" style="margin-top:6px"><h3>Хочу поехать <small>${w.length}</small></h3></div>` + (w.length ? w.map(tripCard).join("") + `<p class="empty">Нажми на поездку, чтобы посчитать бюджет и пройти шаги до билета.</p>`
-      : `<p class="empty">Здесь будут города, куда ты хочешь поехать. Отметь «хочу» у любого города или свайпни карточку вправо в «Подборе».</p>`)
-      + `<div class="sec" id="secBeen"><h3>Где я был <small>${bl.length} ${plural(bl.length, "город", "города", "городов")}</small></h3></div>` + (bl.length ? bl.map(c => `<div class="hubrow">${line(c, "", ` style="font-size:${c.hub ? 18 : 15}px"`)}</div>`).join("")
-      : `<p class="empty">Отметь «был» в списке городов или нажми «Был там» на карточке в «Подборе».</p>`);
+    document.getElementById("ringOff").onclick = () => toggleRing(false);
     return;
   }
   if (query) {
     const q = query.toLowerCase().replace(/ё/g, "е");
     const res = CITIES.filter(c => c.name.toLowerCase().replace(/ё/g, "е").includes(q)).sort((a, b) => b.pop - a.pop).slice(0, 40);
-    listEl.innerHTML = res.length ? res.map(c => `<div class="hubrow">${line(c, "", ` style="font-size:${c.hub ? 18 : 15}px"`)}</div>`).join("") : `<p class="empty">Такого города нет в списке.</p>`;
+    listEl.innerHTML = head + (res.length ? res.map(c => `<div class="hubrow">${row(c, "", ` style="font-size:${c.hub ? 18 : 15}px"`)}</div>`).join("") : `<p class="empty">Такого города нет в списке.</p>`);
     return;
   }
-  listEl.innerHTML = HUBS.map(h => {
+  listEl.innerHTML = head + HUBS.map(h => {
     const subs = CITIES.filter(c => c.gi === h.gi && !c.hub);
-    const lit = subs.filter(c => marks[c.id] === "b").length;
+    const lit = subs.filter(c => marks[c.id] === (tab === "want" ? "w" : "b")).length;
     const isOpen = open === h.gi;
     let inner = "";
     if (isOpen) {
       const shown = showAll ? subs : subs.slice(0, 12);
-      inner = `<div class="subs">${shown.map(c => line(c, c.pop >= 1e5 ? "s1" : c.pop >= 2e4 ? "s2" : "s3")).join("")}${subs.length > shown.length ? `<button class="more" data-all="1">Показать все ${subs.length}</button>` : ""}</div>`;
+      inner = `<div class="subs">${shown.map(c => row(c, c.pop >= 1e5 ? "s1" : c.pop >= 2e4 ? "s2" : "s3")).join("")}${subs.length > shown.length ? `<button class="more" data-all="1">Показать все ${subs.length}</button>` : ""}</div>`;
     }
-    const more = subs.length ? `<button class="more" data-open="${h.gi}" aria-expanded="${isOpen}">${isOpen ? "Свернуть" : `Ещё ${subs.length} ${plural(subs.length, "город", "города", "городов")} рядом`}${lit ? ` · <b>был в ${lit}</b>` : ""}</button>` : "";
-    return `<div class="hubrow" data-hub="${h.gi}">${line(h, "", ` style="font-size:${hubSize(h.pop)}px"`)}${more}${inner}</div>`;
+    const more = subs.length ? `<button class="more" data-open="${h.gi}" aria-expanded="${isOpen}">${isOpen ? "Свернуть" : `Ещё ${subs.length} ${plural(subs.length, "город", "города", "городов")} рядом`}${lit ? ` · <b>${tab === "want" ? "в планах" : "отмечено"}: ${lit}</b>` : ""}</button>` : "";
+    return `<div class="hubrow" data-hub="${h.gi}">${row(h, "", ` style="font-size:${hubSize(h.pop)}px"`)}${more}${inner}</div>`;
   }).join("");
 }
 
@@ -713,7 +727,7 @@ function renderCard() {
       ${step(m === "b", "Съездить", m === "b" ? "точка на карте стала сплошной" : "после поездки отметь, и город станет твоим", m === "b" ? "" : `<button class="act" data-k="b" data-id="${esc(c.id)}">Я съездил</button>`)}
     </div></div>` : "";
   cardEl.innerHTML = `
-    <button class="back" id="back">← К списку</button>
+    <button class="back" id="back">← Назад</button>
     <div class="eyebrow">${esc(g.t)}</div>
     <h1 class="cname ${m}">${esc(c.name)}</h1>
     <div class="cmeta">${fmtPop(c.pop)} жителей</div>
@@ -763,15 +777,8 @@ panel.addEventListener("click", e => {
   const a = e.target.closest("a[data-after]");
   if (a && cardCity) { const t = tripOf(cardCity.id); t[a.dataset.after] = true; save(); setTimeout(renderCard, 50); return; }
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.tab) { tab = b.dataset.tab; statView = ""; renderList(); return; }
-  if (b.dataset.stat) {
-    const s = b.dataset.stat;
-    if (s === "regions") { tab = "regions"; statView = ""; } else { tab = "trips"; statView = s; }
-    renderList();
-    requestAnimationFrame(() => { const el = document.getElementById(s === "been" ? "secBeen" : s === "want" ? "secWant" : "list"); el?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" }); });
-    return;
-  }
-  if (b.dataset.region !== undefined) { tab = "all"; statView = ""; open = +b.dataset.region; showAll = true; renderList(); requestAnimationFrame(() => listEl.querySelector(`[data-hub="${open}"]`)?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" })); return; }
+  if (b.dataset.mode) { if (cardCity) closeCard(); tab = b.dataset.mode; renderList(); return; }
+  if (b.dataset.tog) { setMark(b.dataset.tog, tab === "want" ? "w" : "b"); return; }
   if (b.dataset.g) { const gr = TAG_GROUPS.find(x => x.key === b.dataset.g), v = b.dataset.t; if (gr.multi) { const s = pick.sel[gr.key]; s.has(v) ? s.delete(v) : s.add(v); } else pick.sel[gr.key] = v; renderPick(); return; }
   if (b.dataset.swipe) { decide(b.dataset.swipe); return; }
   if (b.dataset.k) return setMark(b.dataset.id, b.dataset.k);
@@ -787,14 +794,15 @@ panel.addEventListener("click", e => {
   else return;
   save(); renderCard();
 });
-document.getElementById("ringBan").onclick = () => {
-  if (tab === "ring") { tab = "all"; renderList(); d3.select(cv).transition().duration(reduce ? 0 : 800).call(zoom.transform, d3.zoomIdentity); return; }
-  tab = "ring"; renderList();
+function toggleRing(on) {
+  ringFilter = on; renderList();
+  if (!on) { d3.select(cv).transition().duration(reduce ? 0 : 800).call(zoom.transform, d3.zoomIdentity); return; }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const c of RING) { const x = ox + s0 * c.px, y = oy + s0 * c.py; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   const kk = Math.min(40, .55 * Math.min(cw / Math.max(8, x1 - x0), ch / Math.max(8, y1 - y0)));
   d3.select(cv).transition().duration(reduce ? 0 : 900).ease(d3.easeCubicInOut).call(zoom.transform, d3.zoomIdentity.translate(cw / 2 - kk * (x0 + x1) / 2, ch / 2 - kk * (y0 + y1) / 2).scale(kk));
-};
+}
+document.getElementById("ringBan").onclick = () => toggleRing(!ringFilter);
 document.getElementById("q").addEventListener("input", e => { query = e.target.value.trim(); renderList(); });
 
 // ---------- Gen UI: «Подбор» ----------
@@ -953,7 +961,7 @@ function renderPick() {
       <p class="hint">Свайп вправо — хочу, влево — не сейчас</p>`;
   } else if (pick.cards.length) {
     deck = `<div class="done"><b>Подборка закончилась</b><span>В «Мои поездки» добавлено: ${pick.liked}. Отмечено «был»: ${pick.been}.</span>
-      <div class="deckbtns"><button class="rb been" id="regen">Ещё подборку</button><button class="rb been" data-tab="trips">Мои поездки</button></div></div>`;
+      <div class="deckbtns"><button class="rb been" id="regen">Ещё подборку</button><button class="rb been" data-mode="want">Мои поездки</button></div></div>`;
   }
   const chipsHtml = chips.replace('<div class="grp"><div class="gt">С кем</div>', slider + '<div class="grp"><div class="gt">С кем</div>');
   listEl.innerHTML = `<div class="pick">
